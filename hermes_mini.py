@@ -18,8 +18,7 @@ AUTO_TRADE = True
 POSITION_SIZE = 15
 DEFAULT_LEVERAGE = 5
 SYMBOLS = ["BTC", "ETH", "XAU"]
-OHLCV_1H = "/root/hermes/strategies/attack_backtest/gateio_contract_1h.csv"
-FACTOR_CSV = "/root/hermes/strategies/attack_backtest/paper_logs/factor_signals.csv"
+OHLCV_4H = "/root/hermes/strategies/attack_backtest/paper_logs/ohlcv.csv"  # cronjob写入
 
 # ═══════════════ 指标计算 ═══════════════
 def ema(arr, period):
@@ -47,14 +46,20 @@ def load_ohlcv(path, symbol, limit=100):
     try:
         with open(path) as f:
             for row in csv.DictReader(f):
-                if row["symbol"]==symbol: rows.append(row)
+                if row.get("symbol","")==symbol: rows.append(row)
         rows = rows[-limit:]
         if not rows: return None
-        return {"o":np.array([float(r["open"]) for r in rows]),
-                "h":np.array([float(r["high"]) for r in rows]),
-                "l":np.array([float(r["low"]) for r in rows]),
-                "c":np.array([float(r["close"]) for r in rows]),
-                "v":np.array([float(r["volume"]) for r in rows]), "n":len(rows)}
+        # 兼容两种列名: ohlcv.csv用timestamp/volume, gateio用date/vol
+        o_col = "open" if "open" in rows[0] else "o"
+        h_col = "high" if "high" in rows[0] else "h"
+        l_col = "low" if "low" in rows[0] else "l"
+        c_col = "close" if "close" in rows[0] else "c"
+        v_col = "volume" if "volume" in rows[0] else "v"
+        return {"o":np.array([float(r[o_col]) for r in rows]),
+                "h":np.array([float(r[h_col]) for r in rows]),
+                "l":np.array([float(r[l_col]) for r in rows]),
+                "c":np.array([float(r[c_col]) for r in rows]),
+                "v":np.array([float(r[v_col]) for r in rows]), "n":len(rows)}
     except: return None
 
 def compute_indicators(df):
@@ -170,7 +175,7 @@ async def main():
                 # 优先用CSV做指标，XAU用API K线
                 indicators = {}
                 for sym, df in zip(SYMBOLS, kline_results):
-                    csv_df = load_ohlcv(OHLCV_1H, f"{sym}_USDT", 100) if sym != "XAU" else None
+                    csv_df = load_ohlcv(OHLCV_4H, f"{sym}_USDT", 100) if sym != "XAU" else None
                     src = csv_df or df
                     if src:
                         indicators[sym] = compute_indicators(src)
