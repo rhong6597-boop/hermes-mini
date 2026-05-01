@@ -1,0 +1,14 @@
+[Unit]
+Description=News Guard — 消息面风控守门员
+After=network.target
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/hermes/free_news_guard_v2
+ExecStart=/usr/bin/python3 -u /root/hermes/free_news_guard_v2/free_news_guard_v2.py
+Restart=on-failure
+RestartSec=30
+StandardOutput=append:/root/hermes/free_news_guard_v2/news_guard.log
+StandardError=append:/root/hermes/free_news_guard_v2/news_guard.log
+[Install]
+WantedBy=multi-user.target

@@ -18,7 +18,8 @@ AUTO_TRADE = True
 POSITION_SIZE = 15
 DEFAULT_LEVERAGE = 5
 SYMBOLS = ["BTC", "ETH", "XAU"]
-OHLCV_4H = "/root/hermes/strategies/attack_backtest/paper_logs/ohlcv.csv"  # cronjob写入
+OHLCV_4H = "/root/hermes/strategies/attack_backtest/paper_logs/ohlcv.csv"
+NEWS_STATE = "/root/hermes/free_news_guard_v2/data/news_state.json"  # 新闻风控
 
 # ═══════════════ 指标计算 ═══════════════
 def ema(arr, period):
@@ -200,7 +201,19 @@ async def main():
                             await asyncio.sleep(5); continue
                     await asyncio.sleep(30); continue
 
-                # ── 3. AI决策 ──
+                # ── 3. 新闻风控 ──
+                risk_block = False
+                try:
+                    if os.path.exists(NEWS_STATE):
+                        with open(NEWS_STATE) as f:
+                            ns = json.load(f)
+                        risk_block = ns.get("risk_block", False)
+                        if risk_block:
+                            ts = datetime.now().strftime("%H:%M:%S")
+                            print(f"[{ts}] 🛡 新闻风控阻断 | {ns.get('risk_level','?')}级 | {ns.get('active_threats',[])[:2]}")
+                except: pass
+
+                # ── 4. AI决策 ──
                 market = {f"{sym.lower()}_funding":f"{fundings[sym]:.6f}" for sym in SYMBOLS}
                 decision = await ask_deepseek(s, market, indicators)
 
@@ -213,7 +226,7 @@ async def main():
                 ts = datetime.now().strftime("%H:%M:%S")
                 print(f"[{ts}] {emoji} {sym} {action} {conf}级 | {reason}")
 
-                if AUTO_TRADE and conf in ("A","B") and action!="hold":
+                if AUTO_TRADE and not risk_block and conf in ("A","B") and action!="hold":
                     lev = min(decision.get("leverage",DEFAULT_LEVERAGE), 8)
                     result = await gate_place(s, sym, action, POSITION_SIZE, lev)
                     status = "✅" if result and "id" in str(result) else f"❌{result}"
